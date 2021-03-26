@@ -36,7 +36,8 @@ func AddFeed(proxyURI string, doc *opml.OPML, feedURL, group string) {
 	fp.Client = ProxyClient(proxyURI)
 	feed, err := fp.ParseURL(feedURL)
 	if err != nil {
-		panic(err)
+		log.Printf("fail to parse %s for %s", feedURL, err)
+		return
 	}
 	var groupOutline *opml.Outline
 	if group != "" {
@@ -110,9 +111,9 @@ func main() {
 		}
 	}
 	var lastUpdate time.Time
-	lastUpdate = time.Now().UTC().Truncate(time.Hour * 24)
+	lastUpdate = time.Now().UTC().Add(-1 * opts.TimeOffset)
+	log.Printf("now is %s", time.Now().UTC())
 	log.Printf("last update is %s", lastUpdate)
-	log.Printf("%#v", opmlDoc.Body)
 	var UpdateNews = func() {
 		log.Printf("start updating news now")
 		startedAt := time.Now().UTC()
@@ -141,26 +142,28 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 		feed, err := fp.ParseURL(outline.XMLURL)
 		if err != nil {
 			log.Printf("fail to parse outline %s %s for %s", outline.Title, outline.XMLURL, err)
-		}
-		for _, item := range feed.Items {
-			if lastUpdate.IsZero() || item.PublishedParsed.UTC().After(lastUpdate) {
-				author := ""
-				if item.Author != nil {
-					author = item.Author.Name
-					if item.Author.Email != "" {
-						author = fmt.Sprintf("%s <%s>", author, item.Author.Email)
+			return
+		} else {
+			for _, item := range feed.Items {
+				if lastUpdate.IsZero() || item.PublishedParsed.UTC().After(lastUpdate) {
+					author := ""
+					if item.Author != nil {
+						author = item.Author.Name
+						if item.Author.Email != "" {
+							author = fmt.Sprintf("%s <%s>", author, item.Author.Email)
+						}
 					}
+					publishedAt := item.PublishedParsed.Format("2006-01-02 15:04")
+					log.Printf("New Message: %s %s %s\n", publishedAt, author, item.Title)
+					// fmt.Printf("%s\n", item.Description)
+					// fmt.Printf("%s\n", item.Content)
+					msg := strings.TrimSpace(fmt.Sprintf("%s %s %s %s %s", prefix, author, publishedAt, item.Title, item.Link))
+					if notifyer != nil {
+						notifyer.Notify(msg)
+					}
+				} else {
+					// ignore old posts
 				}
-				publishedAt := item.PublishedParsed.Format("2006-01-02 15:04")
-				log.Printf("New Message: %s %s %s\n", publishedAt, author, item.Title)
-				// fmt.Printf("%s\n", item.Description)
-				// fmt.Printf("%s\n", item.Content)
-				msg := strings.TrimSpace(fmt.Sprintf("%s %s %s %s %s", prefix, author, publishedAt, item.Title, item.Link))
-				if notifyer != nil {
-					notifyer.Notify(msg)
-				}
-			} else {
-				// ignore old posts
 			}
 		}
 	}
@@ -174,6 +177,7 @@ type Options struct {
 	TgChannelID   int64
 	proxyURI      string
 	CheckInterval time.Duration
+	TimeOffset    time.Duration
 }
 
 func InitOptions() (o *Options) {
@@ -182,6 +186,7 @@ func InitOptions() (o *Options) {
 	flag.Int64Var(&o.TgChannelID, "tg_channel", 0, "tc")
 	flag.StringVar(&o.proxyURI, "proxy", "", "")
 	flag.DurationVar(&o.CheckInterval, "check_interval", time.Minute*0, "")
+	flag.DurationVar(&o.TimeOffset, "offset", time.Hour*1, "")
 	flag.Parse()
 	return o
 }
@@ -194,7 +199,7 @@ type NotifierTg struct {
 }
 
 func NewNotifierTg(proxyURI, token string, channelID int64) *NotifierTg {
-	log.Printf("token: %s, channelID: %d", token, channelID)
+	// log.Printf("token: %s, channelID: %d", token, channelID)
 	if token == "" || channelID == 0 {
 		log.Printf("BotToken && ChannelID cannot be empty")
 		return nil
