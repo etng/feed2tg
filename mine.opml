@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<opml version="2.0">
+	<head>
+		<title>My OPML</title>
+		<dateCreated>Fri, 26 Mar 2021 16:21:05 CST</dateCreated>
+		<dateModified>Fri, 26 Mar 2021 16:21:05 CST</dateModified>
+		<ownerName>Yi Bo</ownerName>
+		<ownerEmail>etng2004@gmail.com</ownerEmail>
+	</head>
+	<body>
+		<outline text="Tech">
+			<outline text="阮一峰的网络日志" type="rss" xmlUrl="http://feeds.feedburner.com/ruanyifeng" htmlUrl="http://www.ruanyifeng.com/blog/" language="en" title="阮一峰的网络日志" version="2.0" description="Ruan YiFeng&#39;s Blog"></outline>
+			<outline text="Airing 的小屋" type="rss" xmlUrl="https://me.ursb.me/feed" htmlUrl="https://me.ursb.me/" language="zh-CN" title="Airing 的小屋" version="2.0" description="Airing的小屋"></outline>
+			<outline text="Winnie散漫遊" type="rss" xmlUrl="https://winnielife.com/feed/" htmlUrl="https://winnielife.com" language="en-US" title="Winnie散漫遊" version="2.0" description="跟著我們一起30歲就退休享受世界的美好"></outline>
+			<outline text="依云&#39;s Blog" type="rss" xmlUrl="https://blog.lilydjwg.me/feed" htmlUrl="https://blog.lilydjwg.me/" title="依云&#39;s Blog" version="2.0"></outline>
+		</outline>
+		<outline text="News">
+			<outline text="少数派" type="rss" xmlUrl="https://sspai.com/feed" htmlUrl="https://sspai.com" language="zh-CN" title="少数派" version="2.0" description="少数派致力于更好地运用数字产品或科学方法，帮助用户提升工作效率和生活品质"></outline>
+			<outline text="少数派 -- Matrix" type="rss" xmlUrl="https://rsshub.app/sspai/matrix" htmlUrl="https://sspai.com/matrix" language="zh-cn" title="少数派 -- Matrix" version="2.0" description="少数派 -- Matrix - Made with love by RSSHub(https://github.com/DIYgod/RSSHub)"></outline>
+		</outline>
+	</body>
+</opml>
