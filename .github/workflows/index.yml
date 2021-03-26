@@ -1,4 +1,4 @@
-name: Rss2TG
+name: Feed2TG
 on:
   schedule:
     - cron: '0 */8 * * *'
@@ -16,4 +16,4 @@ jobs:
         - name: Checkout code
           uses: actions/checkout@v2
         - name: build
-          run: go run main.go --tg_token=${{secrets.tg_token}} --tg_channel=${{secrets.CHANNELID}}
+          run: go run main.go --tg_token=${{secrets.TG_TOKEN}} --tg_channel=${{secrets.TG_CHANNEL}}
