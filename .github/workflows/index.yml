@@ -16,4 +16,4 @@ jobs:
         - name: Checkout code
           uses: actions/checkout@v2
         - name: build
-          run: go run main.go --tg_token=${{secrets.TG_TOKEN}} --tg_channel=${{secrets.TG_CHANNEL}}
+          run: go run main.go --tg_token=${{secrets.TG_TOKEN}} --tg_channel=${{secrets.TG_CHANNEL}} --proxy=
