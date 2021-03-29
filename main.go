@@ -10,8 +10,9 @@ import (
 	"strings"
 	"time"
 
+	"github.com/etng/feed2tg/notify"
+
 	"github.com/etng/feed2tg/opml"
-	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api"
 	"github.com/mmcdole/gofeed"
 )
 
@@ -76,10 +77,14 @@ func AddFeed(proxyURI string, doc *opml.OPML, feedURL, group string) {
 }
 func main() {
 	opts := InitOptions()
-	notifyer := NewNotifierTg(opts.proxyURI, opts.TgToken, opts.TgChannelID)
-	if notifyer != nil {
-		notifyer.Start()
-	}
+	notifiers := notify.NewNotifiers()
+	go notifiers.Start()
+
+	tgNotifyer := notify.NewNotifierTg(opts.TgToken, opts.TgChannelID, ProxyClient(opts.proxyURI))
+	notifiers.Register(tgNotifyer)
+	ppNotifyer := notify.NewNotifierPP(opts.PpToken, opts.PpTopic, nil)
+	notifiers.Register(ppNotifyer)
+
 	opmlFilename := "mine.opml"
 	opmlDoc, e := opml.NewOPMLFromFile(opmlFilename)
 	if e != nil {
@@ -119,7 +124,7 @@ func main() {
 		startedAt := time.Now().UTC()
 		log.Printf("%d outlines", len(opmlDoc.Body.Outlines))
 		for _, outline := range opmlDoc.Body.Outlines {
-			UpdateOutline("", lastUpdate, opts, notifyer, outline)
+			UpdateOutline("", lastUpdate, opts, notifiers, outline)
 		}
 		log.Printf("end updating news, used %s", time.Now().Sub(startedAt))
 		lastUpdate = startedAt
@@ -132,10 +137,12 @@ func main() {
 		for range ticker.C {
 			UpdateNews()
 		}
+	} else {
+		time.Sleep(time.Second * 60)
 	}
 	log.Printf("done")
 }
-func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer Notifyer, outline *opml.Outline) {
+func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer notify.Notifyer, outline *opml.Outline) {
 	if outline.XMLURL != "" {
 		fp := gofeed.NewParser()
 		fp.Client = ProxyClient(opts.proxyURI)
@@ -158,9 +165,7 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 					// fmt.Printf("%s\n", item.Description)
 					// fmt.Printf("%s\n", item.Content)
 					msg := strings.TrimSpace(fmt.Sprintf("%s %s %s %s %s", prefix, author, publishedAt, item.Title, item.Link))
-					if notifyer != nil {
-						notifyer.Notify(msg)
-					}
+					notifyer.Notify(msg)
 				} else {
 					// ignore old posts
 				}
@@ -174,6 +179,8 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 
 type Options struct {
 	TgToken       string
+	PpToken       string
+	PpTopic       string
 	TgChannelID   int64
 	proxyURI      string
 	CheckInterval time.Duration
@@ -182,53 +189,15 @@ type Options struct {
 
 func InitOptions() (o *Options) {
 	o = new(Options)
+	flag.StringVar(&o.PpToken, "pp_token", "", "pt")
+	flag.StringVar(&o.PpTopic, "pp_topic", "", "pto")
 	flag.StringVar(&o.TgToken, "tg_token", "", "tt")
 	flag.Int64Var(&o.TgChannelID, "tg_channel", 0, "tc")
 	flag.StringVar(&o.proxyURI, "proxy", "", "")
 	flag.DurationVar(&o.CheckInterval, "check_interval", time.Minute*0, "")
-	flag.DurationVar(&o.TimeOffset, "offset", time.Hour*1, "")
+	flag.DurationVar(&o.TimeOffset, "offset", time.Hour*12, "")
 	flag.Parse()
 	return o
-}
-
-type NotifierTg struct {
-	Token     string
-	ChannelID int64
-	ch        chan string
-	bot       *tgbotapi.BotAPI
-}
-
-func NewNotifierTg(proxyURI, token string, channelID int64) *NotifierTg {
-	// log.Printf("token: %s, channelID: %d", token, channelID)
-	if token == "" || channelID == 0 {
-		log.Printf("BotToken && ChannelID cannot be empty")
-		return nil
-	}
-	bot, err := tgbotapi.NewBotAPIWithClient(token, ProxyClient(proxyURI))
-	if err != nil {
-		log.Printf("fail to init tgbot: %s", err)
-		return nil
-	}
-	return &NotifierTg{
-		Token:     token,
-		ChannelID: channelID,
-		ch:        make(chan string, 10),
-		bot:       bot,
-	}
-}
-func (n *NotifierTg) Start() {
-	go func() {
-		for msg := range n.ch {
-			tgMsg := tgbotapi.NewMessage(n.ChannelID, msg)
-			tgMsg.DisableWebPagePreview = true
-			_, _ = n.bot.Send(tgMsg)
-		}
-	}()
-
-}
-func (n *NotifierTg) Notify(msg string) {
-	log.Printf("notifing %s", msg)
-	n.ch <- msg
 }
 
 func ProxyClient(proxyURI string) *http.Client {
@@ -246,8 +215,4 @@ func ProxyClient(proxyURI string) *http.Client {
 		},
 		Timeout: time.Second * 60,
 	}
-}
-
-type Notifyer interface {
-	Notify(msg string)
 }
