@@ -100,6 +100,7 @@ func main() {
 			"News": {
 				"https://sspai.com/feed",
 				"https://rsshub.app/sspai/matrix",
+				"https://www.qbitai.com/feed",
 			},
 		} {
 			for _, feedURL := range feedURLs {
