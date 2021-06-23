@@ -127,7 +127,7 @@ func main() {
 		for _, outline := range opmlDoc.Body.Outlines {
 			UpdateOutline("", lastUpdate, opts, notifiers, outline)
 		}
-		log.Printf("end updating news, used %s", time.Now().Sub(startedAt))
+		log.Printf("end updating news, used %s", time.Since(startedAt))
 		lastUpdate = startedAt
 	}
 	UpdateNews()
@@ -152,7 +152,10 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 			log.Printf("fail to parse outline %s %s for %s", outline.Title, outline.XMLURL, err)
 			return
 		} else {
+			title := fmt.Sprintf("# %s %s", prefix, outline.Text)
+			lines := []string{}
 			for _, item := range feed.Items {
+				log.Printf("comparing %s %s", lastUpdate, item.PublishedParsed.UTC())
 				if lastUpdate.IsZero() || item.PublishedParsed.UTC().After(lastUpdate) {
 					author := ""
 					if item.Author != nil {
@@ -162,15 +165,22 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 						}
 					}
 					publishedAt := item.PublishedParsed.Format("2006-01-02 15:04")
-					log.Printf("New Message: %s %s %s\n", publishedAt, author, item.Title)
+					log.Printf("New Message: %s %s %s", publishedAt, author, item.Title)
 					// fmt.Printf("%s\n", item.Description)
 					// fmt.Printf("%s\n", item.Content)
-					msg := strings.TrimSpace(fmt.Sprintf("%s %s %s %s %s", prefix, author, publishedAt, item.Title, item.Link))
-					notifyer.Notify(msg)
+					lines = append(lines, strings.TrimSpace(fmt.Sprintf("* %s %s %s %s", author, publishedAt, item.Title, item.Link)))
 				} else {
 					// ignore old posts
 				}
 			}
+			if len(lines) > 0 {
+				log.Printf("%s has %d updates", outline.Title, len(lines))
+				notifyer.Notify(strings.TrimSpace(fmt.Sprintf(`
+# %s
+%s
+			`, title, strings.Join(lines, "\r\n"))))
+			}
+
 		}
 	}
 	for _, child := range outline.Outlines {
