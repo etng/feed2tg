@@ -1,13 +1,17 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/etng/feed2tg/notify"
@@ -75,15 +79,22 @@ func AddFeed(proxyURI string, doc *opml.OPML, feedURL, group string) {
 	}
 	log.Printf("added feed %s %s group %s", feed.Title, feedURL, group)
 }
+
+var cachePath = "./data/cache"
+
 func main() {
 	opts := InitOptions()
+	cachePath = opts.CachePath
 	notifiers := notify.NewNotifiers()
 	go notifiers.Start()
-
-	tgNotifyer := notify.NewNotifierTg(opts.TgToken, opts.TgChannelID, ProxyClient(opts.proxyURI))
-	notifiers.Register(tgNotifyer)
-	ppNotifyer := notify.NewNotifierPP(opts.PpToken, opts.PpTopic, nil)
-	notifiers.Register(ppNotifyer)
+	if opts.DummyNotify {
+		notifiers.Register(notify.NewNotifierDummy())
+	} else {
+		tgNotifyer := notify.NewNotifierTg(opts.TgToken, opts.TgChannelID, ProxyClient(opts.proxyURI))
+		notifiers.Register(tgNotifyer)
+		ppNotifyer := notify.NewNotifierPP(opts.PpToken, opts.PpTopic, nil)
+		notifiers.Register(ppNotifyer)
+	}
 
 	opmlFilename := "mine.opml"
 	opmlDoc, e := opml.NewOPMLFromFile(opmlFilename)
@@ -117,16 +128,19 @@ func main() {
 		}
 	}
 	var lastUpdate time.Time
-	lastUpdate = time.Now().UTC().Add(-1 * opts.TimeOffset)
+	lastUpdate = time.Now().UTC().Add(-1 * opts.TimeOffset).Add(-36 * time.Hour)
 	log.Printf("now is %s", time.Now().UTC())
 	log.Printf("last update is %s", lastUpdate)
 	var UpdateNews = func() {
 		log.Printf("start updating news now")
 		startedAt := time.Now().UTC()
 		log.Printf("%d outlines", len(opmlDoc.Body.Outlines))
+		var wg sync.WaitGroup
 		for _, outline := range opmlDoc.Body.Outlines {
-			UpdateOutline("", lastUpdate, opts, notifiers, outline)
+			wg.Add(1)
+			go UpdateOutline("", lastUpdate, opts, notifiers, outline, &wg)
 		}
+		wg.Wait()
 		log.Printf("end updating news, used %s", time.Since(startedAt))
 		lastUpdate = startedAt
 	}
@@ -138,12 +152,16 @@ func main() {
 		for range ticker.C {
 			UpdateNews()
 		}
-	} else {
-		time.Sleep(time.Second * 60)
 	}
 	log.Printf("done")
 }
-func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer notify.Notifyer, outline *opml.Outline) {
+
+type FeedCache struct {
+	LastUpdate *time.Time `json:"last_update,omitempty" yaml:"last_update" mapstructure:"last_update"`
+}
+
+func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer notify.Notifyer, outline *opml.Outline, wg *sync.WaitGroup) {
+	defer wg.Done()
 	if outline.XMLURL != "" {
 		fp := gofeed.NewParser()
 		fp.Client = ProxyClient(opts.proxyURI)
@@ -153,10 +171,23 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 			return
 		} else {
 			title := fmt.Sprintf("# %s %s", prefix, outline.Text)
+			log.Printf("parsing feed %q", title)
 			lines := []string{}
+			cacheFile := filepath.Join(cachePath, "feed_cache", prefix, feed.Title)
+			var feedLastUpdate time.Time
+			if body, e := ioutil.ReadFile(cacheFile); e == nil {
+				var feedCache *FeedCache
+				if e := json.Unmarshal(body, &feedCache); e == nil {
+					if feedCache.LastUpdate != nil {
+						feedLastUpdate = *feedCache.LastUpdate
+						log.Printf("last update time is %s", feedLastUpdate)
+					}
+				}
+			}
+			var maxPublishedTime time.Time
 			for _, item := range feed.Items {
-				log.Printf("comparing %s %s", lastUpdate, item.PublishedParsed.UTC())
-				if lastUpdate.IsZero() || item.PublishedParsed.UTC().After(lastUpdate) {
+				itemPublished := item.PublishedParsed.UTC()
+				if feedLastUpdate.IsZero() || itemPublished.After(feedLastUpdate) {
 					author := ""
 					if item.Author != nil {
 						author = item.Author.Name
@@ -165,10 +196,13 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 						}
 					}
 					publishedAt := item.PublishedParsed.Format("2006-01-02 15:04")
-					log.Printf("New Message: %s %s %s", publishedAt, author, item.Title)
+					// log.Printf("New Message: %s %s %s", publishedAt, author, item.Title)
 					// fmt.Printf("%s\n", item.Description)
 					// fmt.Printf("%s\n", item.Content)
 					lines = append(lines, strings.TrimSpace(fmt.Sprintf("* %s %s %s %s", author, publishedAt, item.Title, item.Link)))
+					if maxPublishedTime.IsZero() || maxPublishedTime.Before(*item.PublishedParsed) {
+						maxPublishedTime = *item.PublishedParsed
+					}
 				} else {
 					// ignore old posts
 				}
@@ -179,12 +213,31 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 # %s
 %s
 			`, title, strings.Join(lines, "\r\n"))))
+
+			}
+			if feed.PublishedParsed == nil || feed.PublishedParsed.IsZero() {
+			} else {
+				maxPublishedTime = *feed.PublishedParsed
+			}
+			if !maxPublishedTime.IsZero() && maxPublishedTime != feedLastUpdate {
+				log.Printf("caching feed update time")
+				body, _ := json.Marshal(FeedCache{
+					LastUpdate: &maxPublishedTime,
+				})
+				if e := os.MkdirAll(filepath.Dir(cacheFile), 0777); e != nil {
+					log.Printf("fail to save cache for can not create dir %s", e)
+				} else {
+					if e := ioutil.WriteFile(cacheFile, body, 0666); e != nil {
+						log.Printf("fail to save cache for %s", e)
+					}
+				}
 			}
 
 		}
 	}
 	for _, child := range outline.Outlines {
-		UpdateOutline(outline.Text, lastUpdate, opts, notifyer, child)
+		wg.Add(1)
+		go UpdateOutline(outline.Text, lastUpdate, opts, notifyer, child, wg)
 	}
 }
 
@@ -196,6 +249,8 @@ type Options struct {
 	proxyURI      string
 	CheckInterval time.Duration
 	TimeOffset    time.Duration
+	DummyNotify   bool
+	CachePath     string
 }
 
 func InitOptions() (o *Options) {
@@ -205,6 +260,8 @@ func InitOptions() (o *Options) {
 	flag.StringVar(&o.TgToken, "tg_token", "", "tt")
 	flag.Int64Var(&o.TgChannelID, "tg_channel", 0, "tc")
 	flag.StringVar(&o.proxyURI, "proxy", "", "")
+	flag.StringVar(&o.CachePath, "cache", "./data/cache", "")
+	flag.BoolVar(&o.DummyNotify, "dummy", false, "")
 	flag.DurationVar(&o.CheckInterval, "check_interval", time.Minute*0, "")
 	flag.DurationVar(&o.TimeOffset, "offset", time.Hour*12, "")
 	flag.Parse()

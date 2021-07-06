@@ -27,14 +27,12 @@ func (man *Notifiers) Register(n Notifyer) {
 	if reflect.ValueOf(n).IsNil() {
 		return
 	}
-	log.Printf("new notifier %#v", n)
 	man.Lock()
 	man.workers = append(man.workers, n)
 	man.Unlock()
 	go n.Start()
 }
 func (man *Notifiers) Notify(msg string) {
-	log.Printf("man received msg %s", msg)
 	man.ch <- msg
 }
 func (man *Notifiers) Start() {
@@ -44,7 +42,7 @@ func (man *Notifiers) Start() {
 			log.Printf("no workers in notifyerManager")
 		}
 		for _, worker := range man.workers {
-			log.Printf("worker is %#v", worker)
+			// log.Printf("worker is %#v", worker)
 			go worker.Notify(msg)
 		}
 		man.RUnlock()

@@ -8,3 +8,5 @@ no_notify:
 only_pp:
 	# rm mine.opml || true
 	source .env && go run main.go -pp_token=$${PP_TOKEN} -pp_topic=$${PP_TOPIC} --proxy=$${PROXY}
+dummy:
+	source .env && go run main.go --proxy=$${PROXY} --dummy --cache=./data/cach3
