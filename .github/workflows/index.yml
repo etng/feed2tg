@@ -6,7 +6,7 @@ on:
 #  TZ: Asia/Shanghai
 
 jobs:
-    search-and-push:
+    build-and-run:
         runs-on: ubuntu-latest
         steps:
         - name: Install Go
