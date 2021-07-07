@@ -19,7 +19,7 @@ jobs:
           uses: actions/cache@v2
           id: feed-cache
           with:
-            path: /var/cache/feed2tg
+            path: ~/.var/cache/feed2tg
             key: ${{ runner.os }}-feed-cache
         - name: build
-          run: go run main.go --tg_token=${{secrets.TG_TOKEN}} --tg_channel=${{secrets.TG_CHANNEL}} --cache=/var/cache/feed2tg --proxy=
+          run: go run main.go --tg_token=${{secrets.TG_TOKEN}} --tg_channel=${{secrets.TG_CHANNEL}} --cache=~/.var/cache/feed2tg --proxy=
