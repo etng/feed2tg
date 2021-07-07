@@ -32,6 +32,11 @@ func (man *Notifiers) Register(n Notifyer) {
 	man.Unlock()
 	go n.Start()
 }
+func (man *Notifiers) IsEmpty() bool {
+	man.RLock()
+	defer man.RUnlock()
+	return len(man.workers) == 0
+}
 func (man *Notifiers) Notify(msg string) {
 	man.ch <- msg
 }

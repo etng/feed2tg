@@ -94,6 +94,9 @@ func main() {
 		notifiers.Register(tgNotifyer)
 		ppNotifyer := notify.NewNotifierPP(opts.PpToken, opts.PpTopic, nil)
 		notifiers.Register(ppNotifyer)
+		if notifiers.IsEmpty() {
+			notifiers.Register(notify.NewNotifierDummy())
+		}
 	}
 
 	opmlFilename := "mine.opml"
@@ -128,7 +131,7 @@ func main() {
 		}
 	}
 	var lastUpdate time.Time
-	lastUpdate = time.Now().UTC().Add(-1 * opts.TimeOffset).Add(-36 * time.Hour)
+	lastUpdate = time.Now().UTC().Add(-1 * opts.TimeOffset)
 	log.Printf("now is %s", time.Now().UTC())
 	log.Printf("last update is %s", lastUpdate)
 	var UpdateNews = func() {
@@ -181,6 +184,8 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 					if feedCache.LastUpdate != nil {
 						feedLastUpdate = *feedCache.LastUpdate
 						log.Printf("last update time is %s", feedLastUpdate)
+					} else {
+						feedLastUpdate = lastUpdate
 					}
 				}
 			}

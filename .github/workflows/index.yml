@@ -23,3 +23,8 @@ jobs:
             key: ${{ runner.os }}-feed-cache
         - name: build
           run: go run main.go --tg_token=${{secrets.TG_TOKEN}} --tg_channel=${{secrets.TG_CHANNEL}} --cache=~/.var/cache/feed2tg --proxy=
+        - name: Collect OPML
+          uses: actions/upload-artifact@v1.0.0
+          with:
+            name: latest.opml
+            path: mine.opml
