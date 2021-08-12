@@ -110,11 +110,13 @@ func main() {
 				"https://me.ursb.me/feed",
 				"https://winnielife.com/feed/",
 				"https://blog.lilydjwg.me/feed",
+				"https://www.cyningsun.com/feed.xml",
 			},
 			"News": {
 				"https://sspai.com/feed",
 				"https://rsshub.app/sspai/matrix",
 				"https://www.qbitai.com/feed",
+				"https://www.expreview.com/rss.php",
 			},
 		} {
 			for _, feedURL := range feedURLs {
@@ -178,16 +180,19 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 			lines := []string{}
 			cacheFile := filepath.Join(cachePath, "feed_cache", prefix, feed.Title)
 			var feedLastUpdate time.Time
+			var hitCache = false
 			if body, e := ioutil.ReadFile(cacheFile); e == nil {
 				var feedCache *FeedCache
 				if e := json.Unmarshal(body, &feedCache); e == nil {
 					if feedCache.LastUpdate != nil {
+						hitCache = true
 						feedLastUpdate = *feedCache.LastUpdate
 						log.Printf("last update time is %s", feedLastUpdate)
-					} else {
-						feedLastUpdate = lastUpdate
 					}
 				}
+			}
+			if !hitCache {
+				feedLastUpdate = lastUpdate
 			}
 			var maxPublishedTime time.Time
 			for _, item := range feed.Items {
@@ -204,18 +209,18 @@ func UpdateOutline(prefix string, lastUpdate time.Time, opts *Options, notifyer 
 					// log.Printf("New Message: %s %s %s", publishedAt, author, item.Title)
 					// fmt.Printf("%s\n", item.Description)
 					// fmt.Printf("%s\n", item.Content)
-					lines = append(lines, strings.TrimSpace(fmt.Sprintf("* %s %s %s %s", author, publishedAt, item.Title, item.Link)))
+					lines = append(lines, strings.TrimSpace(fmt.Sprintf("%s %s [%s](%s)", author, publishedAt, item.Title, item.Link)))
 					if maxPublishedTime.IsZero() || maxPublishedTime.Before(*item.PublishedParsed) {
 						maxPublishedTime = *item.PublishedParsed
 					}
 				} else {
-					// ignore old posts
+					log.Printf("ignore old posts")
 				}
 			}
 			if len(lines) > 0 {
 				log.Printf("%s has %d updates", outline.Title, len(lines))
 				notifyer.Notify(strings.TrimSpace(fmt.Sprintf(`
-# %s
+*%s*
 %s
 			`, title, strings.Join(lines, "\r\n"))))
 
