@@ -111,6 +111,7 @@ func main() {
 				"https://winnielife.com/feed/",
 				"https://blog.lilydjwg.me/feed",
 				"https://www.cyningsun.com/feed.xml",
+				"https://www.luozhiyun.com/feed",
 			},
 			"News": {
 				"https://sspai.com/feed",
